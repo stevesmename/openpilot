@@ -43,10 +43,7 @@ ParamsToggle::ParamsToggle(QString param, QString title, QString description, QS
 
   setLayout(hlayout);
 
-  auto p = read_db_bytes(param.toStdString().c_str());
-  if (p.size()){
-    checkbox->setChecked(p[0] == '1');
-  }
+  checkbox->setChecked(Params().read_db_bool(param.toStdString().c_str()));
 
   setStyleSheet(R"(
     QCheckBox { font-size: 70px }
@@ -61,7 +58,7 @@ ParamsToggle::ParamsToggle(QString param, QString title, QString description, QS
 
 void ParamsToggle::checkboxClicked(int state){
   char value = state ? '1': '0';
-  write_db_value(param.toStdString().c_str(), &value, 1);
+  Params().write_db_value(param.toStdString().c_str(), &value, 1);
 }
 
 SettingsWindow::SettingsWindow(QWidget *parent) : QWidget(parent) {

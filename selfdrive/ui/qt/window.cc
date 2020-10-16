@@ -3,6 +3,7 @@
 #include <cmath>
 #include <iostream>
 #include <fstream>
+#include <future>
 #include <signal.h>
 
 #include <QVBoxLayout>
@@ -58,6 +59,13 @@ GLWindow::GLWindow(QWidget *parent) : QOpenGLWidget(parent) {
   timer = new QTimer(this);
   QObject::connect(timer, SIGNAL(timeout()), this, SLOT(timerUpdate()));
 
+  int result = read_param(&brightness_b, "BRIGHTNESS_B", true);
+  result += read_param(&brightness_m, "BRIGHTNESS_M", true);
+  if(result != 0) {
+    brightness_b = 0.0;
+    brightness_m = 5.0;
+  }
+  smooth_brightness = 512;
 }
 
 GLWindow::~GLWindow() {
@@ -82,22 +90,34 @@ void GLWindow::initializeGL() {
 }
 
 void GLWindow::timerUpdate(){
-  ui_update(ui_state);
+  // Update brightness
+  float clipped_brightness = std::min(1023.0f, (ui_state->light_sensor*brightness_m) + brightness_b);
+  smooth_brightness = clipped_brightness * 0.01f + smooth_brightness * 0.99f;
+  int brightness = smooth_brightness;
+
 
 #ifdef QCOM2
   if (ui_state->started != onroad){
     onroad = ui_state->started;
     timer->setInterval(onroad ? 50 : 1000);
+  }
 
-    int brightness = onroad ? 1023 : 0;
-    std::ofstream brightness_control("/sys/class/backlight/panel0-backlight/brightness");
-    if (brightness_control.is_open()){
-      brightness_control << int(brightness) << "\n";
-      brightness_control.close();
-    }
+  if (!ui_state->started){
+    brightness = 0;
   }
 #endif
 
+  std::async(std::launch::async,
+             [brightness]{
+               std::ofstream brightness_control("/sys/class/backlight/panel0-backlight/brightness");
+               if (brightness_control.is_open()){
+                 brightness_control << brightness << "\n";
+                 brightness_control.close();
+               }
+             });
+
+
+  ui_update(ui_state);
   update();
 }
 
